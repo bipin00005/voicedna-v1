@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenAI, Type } from "@google/genai";
 import crypto from "crypto";
+import "dotenv/config";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,7 +17,11 @@ async function startServer() {
   app.use(express.json());
 
   // AI Service Initialization
-  const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY || "");
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error("FATAL ERROR: GEMINI_API_KEY is not defined in environment variables.");
+  }
+  const ai = new GoogleGenAI({ apiKey: apiKey || "" });
 
   // API routes
   app.get("/api/health", (req, res) => {
@@ -30,7 +35,6 @@ async function startServer() {
         return res.status(400).json({ error: "Texts array is required" });
       }
 
-      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
       const combinedText = texts.join("\n\n---\n\n");
       
       const prompt = `Perform a deep forensic analysis of the following writing samples to create a unique "Voice DNA" profile. 
@@ -58,9 +62,10 @@ async function startServer() {
       SAMPLES TO ANALYZE:
       "${combinedText}"`;
 
-      const result = await model.generateContent({
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
+        config: {
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -78,8 +83,11 @@ async function startServer() {
         }
       });
 
-      const response = result.response;
-      const text = response.text();
+      const text = response.text;
+      if (!text) {
+        throw new Error("No response text returned from Gemini API");
+      }
+      
       const cleanJson = text.replace(/```json\n?|\n?```/g, "").trim();
       const analysis = JSON.parse(cleanJson);
       
@@ -101,11 +109,6 @@ async function startServer() {
       if (!text || !profile) {
         return res.status(400).json({ error: "Text and profile are required" });
       }
-
-      const model = genAI.getGenerativeModel({ 
-        model: "gemini-3-flash-preview",
-        systemInstruction: "You are a world-class ghostwriter. Your goal is to bypass AI detectors by mimicking human writing perfectly. This means avoiding all standard AI patterns: no markdown bolding, no bulleted lists, no perfectly balanced sentences, and no 'assistant-like' clarity. You prioritize raw, organic rhythm, personal voice, and subtle human-like 'looseness' in grammar and punctuation."
-      });
 
       const prompt = `REWRITE the following text using the provided Style Profile. 
 
@@ -135,19 +138,26 @@ async function startServer() {
       TEXT TO REWRITE:
       "${text}"`;
 
-      const result = await model.generateContent({
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
+        config: {
+          systemInstruction: "You are a world-class ghostwriter. Your goal is to bypass AI detectors by mimicking human writing perfectly. This means avoiding all standard AI patterns: no markdown bolding, no bulleted lists, no perfectly balanced sentences, and no 'assistant-like' clarity. You prioritize raw, organic rhythm, personal voice, and subtle human-like 'looseness' in grammar and punctuation.",
           temperature: 1.0,
         }
       });
 
-      res.json({ result: result.response.text() });
+      if (!response.text) {
+        throw new Error("No response text returned from Gemini API");
+      }
+
+      res.json({ result: response.text });
     } catch (error) {
       console.error("Humanizing Error:", error);
       res.status(500).json({ error: error instanceof Error ? error.message : "Internal Server Error" });
     }
   });
+
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
