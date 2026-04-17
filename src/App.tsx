@@ -14,13 +14,22 @@ import {
   ArrowRightLeft,
   Menu,
   X,
-  Clock
+  Clock,
+  MessageSquare,
+  Mail,
+  Send,
+  Bot,
+  ShieldCheck,
+  ExternalLink,
+  ShieldAlert,
+  Search,
+  Check
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 import mammoth from 'mammoth';
 import { analyzeStyle, humanizeText } from './lib/gemini';
-import { StyleProfile } from './types';
+import { StyleProfile, ChatMessage } from './types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -32,7 +41,7 @@ export default function App() {
   const [isAppStarted, setIsAppStarted] = useState(() => {
     return localStorage.getItem('voice_dna_profile') !== null;
   });
-  const [activeTab, setActiveTab] = useState<'calibration' | 'humanize' | 'history' | 'profile'>('calibration');
+  const [activeTab, setActiveTab] = useState<'calibration' | 'humanize' | 'history' | 'profile' | 'support' | 'chat' | 'verification'>('calibration');
   const [profile, setProfile] = useState<StyleProfile | null>(null);
   const [samples, setSamples] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -42,16 +51,23 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [history, setHistory] = useState<{id: string, original: string, humanized: string, timestamp: number}[]>([]);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
+  const [hasResendKey, setHasResendKey] = useState(true);
 
   useEffect(() => {
-    // Check if the API key is available in the browser context
-    // In AI Studio, this is managed automatically.
-    const key = process.env.GEMINI_API_KEY;
-    if (!key || key === "MY_GEMINI_API_KEY" || key === "") {
-       setErrorStatus(
-         "The Gemini API key is missing. Please ensure you have added a secret named exactly 'GEMINI_KEY' in the Secrets panel."
-       );
-    }
+    // Ping the server to check for the API key status
+    fetch('/api/health')
+      .then(res => res.json())
+      .then(data => {
+        setHasResendKey(!!data.config?.hasResendKey);
+        if (!data.config?.hasApiKey) {
+          setErrorStatus(
+            "The Gemini API key is missing on the server. Please ensure you have added a secret named 'GEMINI_KEY' in the Secrets panel."
+          );
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not reach health check endpoint:", err);
+      });
   }, []);
 
   useEffect(() => {
@@ -119,6 +135,14 @@ export default function App() {
       const result = await humanizeText(inputText, profile);
       setOutputLines([{ original: inputText, humanized: result }]);
       saveToHistory(inputText, result);
+      
+      // Feature: Automatically copy to clipboard
+      try {
+        await navigator.clipboard.writeText(result);
+      } catch (copyErr) {
+        console.warn("Auto-copy failed:", copyErr);
+      }
+      
       setErrorStatus(null);
     } catch (error) {
       console.error(error);
@@ -176,13 +200,25 @@ export default function App() {
     <div className="flex h-screen w-full overflow-hidden bg-bg text-text-main font-sans relative">
       {/* Mobile Header */}
       <div className="lg:hidden absolute top-0 left-0 right-0 h-16 bg-sidebar border-b border-border flex items-center justify-between px-6 z-50">
-        <div className="flex items-center gap-2.5 font-bold text-lg text-accent">
+        <button 
+          onClick={() => setIsAppStarted(false)} 
+          className="flex items-center gap-2.5 font-bold text-lg text-accent hover:opacity-80 transition-opacity"
+        >
           <Dna size={24} strokeWidth={2.5} />
           VoiceDNA
-        </div>
-        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-text-main">
-          {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setActiveTab('support')}
+              className={cn("p-2 transition-colors", activeTab === 'support' ? "text-accent" : "text-text-dim hover:text-accent")}
+              title="Support & Feedback"
+            >
+              <MessageSquare size={20} />
+            </button>
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-text-main">
+              {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
       </div>
 
       {/* Sidebar Navigation */}
@@ -190,10 +226,13 @@ export default function App() {
         "fixed inset-y-0 left-0 z-40 w-64 bg-sidebar border-r border-border flex flex-col p-6 transition-transform duration-300 lg:relative lg:translate-x-0",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="hidden lg:flex items-center gap-2.5 font-bold text-lg mb-10 text-accent">
+        <button 
+          onClick={() => setIsAppStarted(false)} 
+          className="hidden lg:flex items-center gap-2.5 font-bold text-lg mb-10 text-accent hover:opacity-80 transition-opacity"
+        >
           <Dna size={24} strokeWidth={2.5} />
           VoiceDNA
-        </div>
+        </button>
         
         <nav className="space-y-8 mt-16 lg:mt-0">
           <div>
@@ -220,6 +259,13 @@ export default function App() {
                 disabled={!profile}
               />
               <NavItem 
+                active={activeTab === 'chat'} 
+                onClick={() => { setActiveTab('chat'); setIsSidebarOpen(false); }}
+                icon={<Bot size={18} />}
+                label="App Guide"
+                disabled={!profile}
+              />
+              <NavItem 
                 active={activeTab === 'history'} 
                 onClick={() => { setActiveTab('history'); setIsSidebarOpen(false); }}
                 icon={<History size={18} />}
@@ -229,10 +275,14 @@ export default function App() {
           </div>
 
           <div>
-            <div className="text-[11px] uppercase tracking-widest text-text-dim mb-3 font-semibold">Library</div>
+            <div className="text-[11px] uppercase tracking-widest text-text-dim mb-3 font-semibold">Support</div>
             <div className="space-y-1">
-              <NavItem icon={<FileText size={18} />} label="Recent Drafts" onClick={() => { setActiveTab('humanize'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<History size={18} />} label="Calibration Sets" onClick={() => { setActiveTab('calibration'); setIsSidebarOpen(false); }} />
+              <NavItem 
+                active={activeTab === 'support'}
+                onClick={() => { setActiveTab('support'); setIsSidebarOpen(false); }}
+                icon={<MessageSquare size={18} />}
+                label="Help & Feedback"
+              />
             </div>
           </div>
         </nav>
@@ -255,10 +305,18 @@ export default function App() {
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-xl md:text-2xl font-bold m-0">
-              {activeTab === 'calibration' ? 'Voice Calibration' : activeTab === 'humanize' ? 'Humanize Draft' : activeTab === 'profile' ? 'Voice DNA Profile' : 'History'}
+              {activeTab === 'calibration' ? 'Voice Calibration' : 
+               activeTab === 'humanize' ? 'Humanize Draft' : 
+               activeTab === 'profile' ? 'Voice DNA Profile' : 
+               activeTab === 'chat' ? 'App Guide & Help' :
+               activeTab === 'support' ? 'Support & Feedback' : 'History'}
             </h1>
             <p className="text-xs md:text-sm text-text-dim mt-1">
-              {activeTab === 'calibration' ? 'Upload samples to build your Voice DNA' : activeTab === 'humanize' ? `Applying "${profile?.name}" Voice Profile` : activeTab === 'profile' ? 'Deep analysis of your unique writing style' : 'Review your past humanized texts'}
+              {activeTab === 'calibration' ? 'Upload samples to build your Voice DNA' : 
+               activeTab === 'humanize' ? `Applying "${profile?.name}" Voice Profile` : 
+               activeTab === 'profile' ? 'Deep analysis of your unique writing style' : 
+               activeTab === 'chat' ? 'Ask questions about privacy, features, or how to use the app' :
+               activeTab === 'support' ? 'Report issues or suggest improvements' : 'Review your past humanized texts'}
             </p>
           </div>
           
@@ -511,6 +569,14 @@ export default function App() {
                   <FileText size={16} />
                   Copy Final
                 </button>
+                <button 
+                  disabled={outputLines.length === 0}
+                  onClick={() => setActiveTab('verification')}
+                  className="px-6 py-3 bg-success/10 border border-success/30 text-success rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-success/20 transition-all shadow-lg shadow-success/5 disabled:opacity-30"
+                >
+                  <ShieldCheck size={18} />
+                  Verify AI Detection
+                </button>
               </div>
             </motion.div>
           )}
@@ -527,10 +593,17 @@ export default function App() {
                 <MetricCard label="Perplexity" value={`${Math.round(profile.perplexity * 100)}%`} fill={profile.perplexity * 100} />
                 <MetricCard label="Burstiness" value={`${Math.round(profile.burstiness * 100)}%`} fill={profile.burstiness * 100} />
                 <MetricCard label="Voice Match" value="94.1%" fill={94} />
-                <div className="bg-card border border-border p-4 rounded-xl flex flex-col justify-center">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-text-dim mb-1">Engine</div>
-                  <div className="text-lg font-mono font-bold text-accent">Gemini-3-F</div>
-                </div>
+                  <div className="bg-card border border-border p-4 rounded-xl flex flex-col justify-center">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-dim mb-1">Engine</div>
+                    <a 
+                      href="https://myauthdev.com" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-lg font-mono font-bold text-accent hover:underline decoration-accent/30 underline-offset-4"
+                    >
+                      MyAuthGrp
+                    </a>
+                  </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -668,8 +741,225 @@ export default function App() {
               )}
             </motion.div>
           )}
+
+          {activeTab === 'chat' && (
+            <motion.div 
+              key="chat"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="flex-1 flex flex-col gap-6 overflow-hidden"
+            >
+              <ChatView profile={profile!} />
+            </motion.div>
+          )}
+
+          {activeTab === 'verification' && outputLines.length > 0 && (
+            <motion.div 
+              key="verification"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2"
+            >
+              <VerificationView text={outputLines[0].humanized} />
+            </motion.div>
+          )}
+
+          {activeTab === 'support' && (
+            <motion.div 
+              key="support"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="flex-1 flex flex-col gap-6 overflow-hidden"
+            >
+              <SupportView hasResendKey={hasResendKey} />
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
+    </div>
+  );
+}
+
+function SupportView({ hasResendKey }: { hasResendKey: boolean }) {
+  const [formData, setFormData] = useState({
+    type: 'Feedback',
+    subject: '',
+    message: '',
+    email: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const resp = await fetch('/api/support', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      if (resp.ok) {
+        setSuccess(true);
+        setFormData({ type: 'Feedback', subject: '', message: '', email: '' });
+      } else {
+        const errData = await resp.json();
+        alert(errData.error || "Failed to send message.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("A network error occurred.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="flex-1 flex flex-col items-center justify-center text-center p-12 bg-card border border-border rounded-3xl"
+      >
+        <div className="w-24 h-24 bg-success/10 text-success rounded-full flex items-center justify-center mb-8 shadow-[0_0_30px_rgba(34,197,94,0.1)]">
+          <CheckCircle2 size={48} />
+        </div>
+        <h2 className="text-3xl font-bold mb-4 italic">Message Sent!</h2>
+        <p className="text-text-main text-lg max-w-lg mb-8 leading-relaxed">
+          Your feedback has been successfully delivered to <span className="text-accent font-bold">myauthgrp@gmail.com</span>. 
+        </p>
+        <div className="text-xs text-text-dim/60 mb-8 max-w-md mx-auto">
+          Sent via Resend (Sandbox Mode). To enable delivery to multiple recipients, consider verifying your domain at resend.com.
+        </div>
+        <button 
+          onClick={() => setSuccess(false)}
+          className="px-10 py-4 bg-accent text-white rounded-xl font-bold text-lg hover:bg-accent/90 transition-all shadow-xl shadow-accent/20"
+        >
+          Send Another Message
+        </button>
+      </motion.div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col gap-6 overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
+        <div className="bg-card border border-border rounded-3xl p-6 md:p-8 flex flex-col gap-6 overflow-hidden">
+           <div className="shrink-0">
+             <h2 className="text-xl md:text-2xl font-bold mb-2">How can we help?</h2>
+             <p className="text-sm text-text-dim">Report bugs, suggest features, or just say hello.</p>
+           </div>
+
+           {!hasResendKey && (
+             <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl flex items-start gap-4">
+               <AlertCircle size={20} className="text-amber-500 shrink-0 mt-0.5" />
+               <div className="text-sm text-amber-200/80 leading-relaxed">
+                 <strong className="text-amber-500 block mb-0.5">Contact Method Disabled</strong>
+                 To send emails, please add a secret named <code className="text-amber-400 bg-black/20 px-1 rounded">RESEND_API_KEY</code> in the platform settings.
+               </div>
+             </div>
+           )}
+
+           <form onSubmit={handleSubmit} className="flex flex-col gap-4 overflow-y-auto pr-2 custom-scrollbar">
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-text-dim ml-1">Inquiry Type</label>
+                  <select 
+                    value={formData.type}
+                    onChange={e => setFormData({...formData, type: e.target.value})}
+                    className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-accent transition-all appearance-none"
+                  >
+                    <option>Feedback</option>
+                    <option>Support</option>
+                    <option>Contact</option>
+                    <option>Bug Report</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-text-dim ml-1">Your Email (Optional)</label>
+                  <input 
+                    type="email"
+                    placeholder="you@example.com"
+                    value={formData.email}
+                    onChange={e => setFormData({...formData, email: e.target.value})}
+                    className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-accent transition-all"
+                  />
+                </div>
+             </div>
+
+             <div className="space-y-2">
+               <label className="text-[10px] font-bold uppercase tracking-widest text-text-dim ml-1">Subject</label>
+               <input 
+                 required
+                 placeholder="What is this about?"
+                 value={formData.subject}
+                 onChange={e => setFormData({...formData, subject: e.target.value})}
+                 className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-accent transition-all"
+               />
+             </div>
+
+             <div className="space-y-2 flex-1 min-h-[120px]">
+               <label className="text-[10px] font-bold uppercase tracking-widest text-text-dim ml-1">Message</label>
+               <textarea 
+                 required
+                 placeholder="Tell us more..."
+                 value={formData.message}
+                 onChange={e => setFormData({...formData, message: e.target.value})}
+                 className="w-full h-full min-h-[120px] bg-bg border border-border rounded-xl p-4 text-sm focus:ring-1 focus:ring-accent transition-all resize-none"
+               />
+             </div>
+
+             <button 
+               disabled={isSubmitting}
+               className="mt-2 w-full py-4 bg-accent text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-accent/90 transition-all disabled:opacity-50 shadow-lg shadow-accent/20 shrink-0"
+             >
+               {isSubmitting ? (
+                 <Loader2 className="animate-spin" size={20} />
+               ) : (
+                 <>
+                   <Mail size={18} />
+                   Send Message
+                 </>
+               )}
+             </button>
+           </form>
+        </div>
+
+        <div className="hidden lg:flex flex-col gap-6">
+           <div className="bg-accent/5 border border-accent/20 rounded-3xl p-8">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-accent">
+                <MessageSquare size={20} />
+                Knowledge Base
+              </h3>
+              <div className="space-y-4">
+                <div className="p-4 bg-card/50 rounded-2xl border border-border/50">
+                  <h4 className="text-sm font-bold mb-1 font-sans">What is Voice DNA?</h4>
+                  <p className="text-xs text-text-dim leading-relaxed">Our engine analyzes rhythm, vocabulary, and punctuation to replicate your unique writing personality.</p>
+                </div>
+                <div className="p-4 bg-card/50 rounded-2xl border border-border/50">
+                  <h4 className="text-sm font-bold mb-1 font-sans">Privacy Guarantee</h4>
+                  <p className="text-xs text-text-dim leading-relaxed">All writing samples and DNA profiles are stored locally in your browser and never shared with 3rd parties.</p>
+                </div>
+              </div>
+           </div>
+
+           <div className="bg-sidebar border border-border rounded-3xl p-8 flex-1 flex flex-col justify-center items-center text-center">
+              <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center text-accent mb-6">
+                <Mail size={32} />
+              </div>
+              <h3 className="font-bold mb-1 text-lg">Direct Support</h3>
+              <p className="text-xs text-text-dim mb-6 max-w-[200px]">For urgent inquiries, you can reach us directly at:</p>
+              <div className="group relative">
+                <code className="text-xs bg-bg px-4 py-2 rounded-xl border border-border text-accent font-mono select-all flex items-center gap-2 transition-all hover:border-accent/50 hover:bg-accent/5">
+                  myauthgrp@gmail.com
+                </code>
+              </div>
+           </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -710,10 +1000,13 @@ function LandingPage({ onLaunch }: { onLaunch: () => void }) {
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-landing-bg/80 backdrop-blur-md border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between">
-          <div className="flex items-center gap-2.5 font-bold text-xl text-accent">
+          <button 
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} 
+            className="flex items-center gap-2.5 font-bold text-xl text-accent hover:opacity-80 transition-opacity"
+          >
             <Dna size={28} strokeWidth={2.5} />
             VoiceDNA
-          </div>
+          </button>
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-text-dim">
             <a href="#features" className="hover:text-text-main transition-colors">Features</a>
             <a href="#science" className="hover:text-text-main transition-colors">The Science</a>
@@ -806,10 +1099,15 @@ function LandingPage({ onLaunch }: { onLaunch: () => void }) {
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between gap-12 mb-12">
             <div>
-              <div className="flex items-center gap-2.5 font-bold text-xl text-accent mb-4">
+              <button 
+                onClick={() => {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }} 
+                className="flex items-center gap-2.5 font-bold text-xl text-accent mb-4 hover:opacity-80 transition-opacity"
+              >
                 <Dna size={28} strokeWidth={2.5} />
                 VoiceDNA
-              </div>
+              </button>
               <p className="text-sm text-text-dim max-w-xs leading-relaxed">
                 The world's most advanced behavioral mimicry engine for digital text.
               </p>
@@ -820,9 +1118,17 @@ function LandingPage({ onLaunch }: { onLaunch: () => void }) {
             </div>
           </div>
           <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-[11px] text-text-dim uppercase tracking-widest font-medium">© 2026 VoiceDNA Labs. All rights reserved.</p>
+            <div className="flex flex-col gap-1">
+              <p className="text-[11px] text-text-dim uppercase tracking-widest font-medium">© 2026 <a href="https://myauthdev.com" target="_blank" rel="noopener noreferrer" className="hover:text-accent underline decoration-white/10 underline-offset-4">MyAuthGrp</a> Labs. All rights reserved.</p>
+              <p className="text-[10px] text-text-dim/60">
+                Developed by <a href="https://bipinkhatiwada.com.np" target="_blank" rel="noopener noreferrer" className="text-accent/60 hover:text-accent transition-colors underline decoration-accent/20 underline-offset-2">Bipin Khatiwada</a>
+              </p>
+            </div>
             <div className="flex items-center gap-6">
-              <span className="text-[10px] px-2 py-0.5 rounded bg-success/10 text-success border border-success/20 font-bold uppercase">System: Operational</span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-success/10 text-success border border-success/20 font-bold uppercase flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                SYSTEM: OPERATIONAL • MYAUTHGRP
+              </span>
             </div>
           </div>
         </div>
@@ -860,6 +1166,366 @@ function FooterCol({ title, links }: { title: string, links: string[] }) {
         {links.map(link => (
           <a key={link} href="#" className="text-sm text-text-dim hover:text-accent transition-colors">{link}</a>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function VerificationView({ text }: { text: string }) {
+  const [scanResult, setScanResult] = useState<any>(null);
+  const [isScanning, setIsScanning] = useState(false);
+
+  useEffect(() => {
+    const runScan = async () => {
+      setIsScanning(true);
+      try {
+        const response = await fetch('/api/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setScanResult(data);
+        }
+      } catch (err) {
+        console.error("Scan failed:", err);
+      } finally {
+        setIsScanning(false);
+      }
+    };
+    runScan();
+  }, [text]);
+
+  const externalTools = [
+    { name: 'ZeroGPT', url: 'https://www.zerogpt.com/', color: 'text-blue-400', desc: 'Highly reliable free engine with low false positives' },
+    { name: 'GPTZero', url: 'https://gptzero.me/', color: 'text-emerald-400', desc: 'The industry standard for academic and educator verification' },
+    { name: 'QuillBot', url: 'https://quillbot.com/ai-detector', color: 'text-orange-400', desc: 'Analyzes sentence structure and rephrasing patterns' },
+    { name: 'CopyLeaks', url: 'https://copyleaks.com/ai-content-detector', color: 'text-purple-400', desc: 'Enterprise-grade deep scan with multi-language support' },
+    { name: 'Winston AI', url: 'https://gowinston.ai/', color: 'text-yellow-400', desc: 'Premium detector specialized in GPT-4 and Claude content' },
+    { name: 'Originality.ai', url: 'https://originality.ai/', color: 'text-red-400', desc: 'Built for web publishers to detect AI and plagiarism' },
+    { name: 'Sapling', url: 'https://sapling.ai/ai-content-detector', color: 'text-cyan-400', desc: 'Fast, snippet-based scanning for professional communication' },
+    { name: 'Scribbr', url: 'https://www.scribbr.com/ai-detector/', color: 'text-indigo-400', desc: 'Trusted academic resource for source integrity' },
+    { name: 'Stealth Writer', url: 'https://stealthwriter.ai/', color: 'text-pink-400', desc: 'Benchmark comparison against advanced rewriting engines' }
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Internal Diagnostic Card */}
+        <div className="lg:col-span-2 bg-card border border-border rounded-3xl overflow-hidden relative">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-success to-accent" />
+          <div className="p-8">
+            <div className="flex items-center justify-between mb-8">
+               <div className="flex items-center gap-3">
+                 <div className="p-3 rounded-2xl bg-success/10 text-success">
+                   <ShieldCheck size={24} />
+                 </div>
+                 <div>
+                   <h3 className="text-xl font-bold">Internal Scan Results</h3>
+                   <p className="text-xs text-text-dim uppercase tracking-widest font-bold">
+                     Engine: <a href="https://myauthdev.com" target="_blank" rel="noopener noreferrer" className="hover:text-accent underline decoration-white/10 decoration-dotted underline-offset-4">MyAuthGrp</a> Diagnostic
+                   </p>
+                 </div>
+               </div>
+               {isScanning && <Loader2 className="animate-spin text-accent" size={24} />}
+            </div>
+
+            {scanResult ? (
+              <div className="space-y-8">
+                <div className="flex items-end gap-6">
+                  <div className="text-7xl font-mono font-bold text-white leading-none">
+                    {100 - scanResult.score}<span className="text-2xl text-text-dim font-sans ml-2">%</span>
+                  </div>
+                  <div className="pb-1">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-success mb-1">Human Probability</div>
+                    <div className="flex gap-1">
+                      {[...Array(10)].map((_, i) => (
+                        <div key={i} className={cn(
+                          "w-3 h-1.5 rounded-full transition-colors",
+                          i < (10 - scanResult.score/10) ? "bg-success" : "bg-white/5"
+                        )} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-6 pt-6 border-t border-white/5">
+                  <div className="space-y-1">
+                    <div className="text-[10px] text-text-dim uppercase font-bold">Perplexity</div>
+                    <div className="text-sm font-mono text-white">{scanResult.breakdown.perplexity}%</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[10px] text-text-dim uppercase font-bold">Burstiness</div>
+                    <div className="text-sm font-mono text-white">{scanResult.breakdown.burstiness}%</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[10px] text-text-dim uppercase font-bold">Pattern Match</div>
+                    <div className="text-sm font-mono text-white">{scanResult.breakdown.patternMatch}%</div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-white/[0.03] rounded-2xl border border-white/5 flex gap-4 items-start">
+                  <div className="p-2 rounded-lg bg-accent/10 text-accent">
+                    <Search size={16} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white mb-1 uppercase tracking-tight">Technical Analysis</div>
+                    <p className="text-xs text-text-dim leading-relaxed italic">"{scanResult.analysis}"</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="py-12 flex flex-col items-center justify-center text-center opacity-30">
+                <Search size={48} className="mb-4" />
+                <p className="text-sm max-w-xs">Initializing deep behavioral scan of your humanized text...</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Global Verification Card */}
+        <div className="bg-sidebar border border-border rounded-3xl p-8 flex flex-col">
+          <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+            <ExternalLink size={18} className="text-text-dim" />
+            External Verification
+          </h3>
+          <p className="text-[11px] text-text-dim mb-8 font-medium leading-relaxed">
+            Major platforms (Quillbot, Turnitin) protect their scan engines via login. Use the tools below for true multi-platform validation.
+          </p>
+
+          <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+            {externalTools.map(tool => (
+              <button 
+                key={tool.name}
+                onClick={async () => {
+                  try { await navigator.clipboard.writeText(text); } catch(e) {}
+                  window.open(tool.url, '_blank');
+                }}
+                className="w-full p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] hover:border-white/10 transition-all flex items-center justify-between group"
+              >
+                <div className="text-left">
+                  <div className={cn("text-sm font-bold mb-0.5 group-hover:text-white transition-colors", tool.color)}>{tool.name}</div>
+                  <div className="text-[10px] text-text-dim">{tool.desc}</div>
+                </div>
+                <div className="p-2 rounded-lg bg-white/5 text-text-dim group-hover:bg-white/10 group-hover:text-white transition-all">
+                  <Check size={14} />
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-8 p-4 rounded-2xl bg-accent/5 border border-accent/10 flex items-center gap-4">
+             <div className="p-2 rounded-xl bg-accent/20 text-accent">
+               <ShieldAlert size={16} />
+             </div>
+             <p className="text-[10px] text-accent/80 leading-relaxed font-bold uppercase tracking-tight">
+               Text is already copied to your clipboard. Just paste (Ctrl+V) when the tool opens.
+             </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6 bg-card border border-border rounded-3xl flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-white/5 rounded-2xl text-text-dim">
+            <FileText size={20} />
+          </div>
+          <div>
+            <div className="text-sm font-bold">Scanning Document</div>
+            <p className="text-xs text-text-dim">{text.slice(0, 60)}...</p>
+          </div>
+        </div>
+        <button 
+          onClick={async () => {
+             try {
+                await navigator.clipboard.writeText(text);
+                alert("Copied to clipboard!");
+             } catch(e) {}
+          }}
+          className="px-6 py-2.5 bg-sidebar border border-border rounded-xl text-sm font-bold hover:bg-white/5 transition-colors"
+        >
+          Recopy Text
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ChatView({ profile }: { profile: StyleProfile }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [useThinking, setUseThinking] = useState(false);
+  const [useLowLatency, setUseLowLatency] = useState(false);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isSending) return;
+
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: input,
+      timestamp: Date.now()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setIsSending(true);
+
+    try {
+      const chatHistory = [...messages, userMessage].map(m => ({
+        role: m.role,
+        parts: [{ text: m.content }]
+      }));
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          messages: chatHistory, 
+          profile,
+          useThinking,
+          useLowLatency
+        })
+      });
+
+      if (!response.ok) throw new Error("Failed to get response");
+      const data = await response.json();
+
+      const aiMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'model',
+        content: data.result,
+        timestamp: Date.now()
+      };
+
+      setMessages(prev => [...prev, aiMessage]);
+    } catch (err) {
+      console.error(err);
+      alert("Error sending message.");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col gap-6 overflow-hidden">
+      <div className="bg-card border border-border rounded-3xl flex-1 flex flex-col overflow-hidden relative">
+        {/* Chat Header */}
+        <div className="p-4 border-b border-border flex items-center justify-between bg-white/[0.02]">
+          <div className="flex items-center gap-3">
+             <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center text-accent">
+               <Bot size={20} />
+             </div>
+             <div>
+               <div className="text-sm font-bold">Assistant Guide</div>
+               <div className="text-[10px] text-success flex items-center gap-1 font-bold uppercase">
+                 <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                 Active Support
+               </div>
+             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => { setUseThinking(!useThinking); if (!useThinking) setUseLowLatency(false); }}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2",
+                useThinking ? "bg-accent text-white" : "bg-bg text-text-dim border border-border"
+              )}
+            >
+              <Sparkles size={14} />
+              High Thinking
+            </button>
+            <button 
+              onClick={() => { setUseLowLatency(!useLowLatency); if (!useLowLatency) setUseThinking(false); }}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2",
+                useLowLatency ? "bg-success text-white" : "bg-bg text-text-dim border border-border"
+              )}
+            >
+              <Clock size={14} />
+              Low Latency
+            </button>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div 
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar"
+        >
+          {messages.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
+              <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
+                <Bot size={32} />
+              </div>
+              <p className="text-sm max-w-xs">Ask me how to use the app, where to click, or about your privacy.</p>
+            </div>
+          ) : (
+            messages.map((m) => (
+              <motion.div 
+                key={m.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn(
+                  "flex gap-4",
+                  m.role === 'user' ? "flex-row-reverse" : "flex-row"
+                )}
+              >
+                <div className={cn(
+                  "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-1",
+                  m.role === 'user' ? "bg-accent/20 text-accent" : "bg-white/10 text-text-main"
+                )}>
+                  {m.role === 'user' ? <Upload size={14} /> : <Bot size={14} />}
+                </div>
+                <div className={cn(
+                  "max-w-[80%] p-4 rounded-2xl text-sm leading-relaxed",
+                  m.role === 'user' ? "bg-accent text-white" : "bg-bg border border-border"
+                )}>
+                  {m.content}
+                </div>
+              </motion.div>
+            ))
+          )}
+          {isSending && (
+            <div className="flex gap-4">
+              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                <Bot size={14} />
+              </div>
+              <div className="bg-bg border border-border p-4 rounded-2xl">
+                <Loader2 size={16} className="animate-spin text-accent" />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Input area */}
+        <form onSubmit={handleSend} className="p-4 bg-white/[0.02] border-t border-border">
+          <div className="relative">
+            <input 
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              placeholder={isSending ? "Syncing..." : "Type your message..."}
+              disabled={isSending}
+              className="w-full bg-bg border border-border rounded-xl pl-4 pr-12 py-3 text-sm focus:ring-1 focus:ring-accent transition-all"
+            />
+            <button 
+              disabled={!input.trim() || isSending}
+              className="absolute right-2 top-1.5 p-2 bg-accent text-white rounded-lg disabled:opacity-50 transition-all hover:bg-accent/90"
+            >
+              <Send size={18} />
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

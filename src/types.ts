@@ -17,3 +17,10 @@ export interface TextAnalysis {
   styleMatchScore: number;
   suggestions: string[];
 }
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'model';
+  content: string;
+  timestamp: number;
+}
