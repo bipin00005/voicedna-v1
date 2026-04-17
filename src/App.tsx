@@ -44,8 +44,13 @@ export default function App() {
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!process.env.GEMINI_API_KEY) {
-      setErrorStatus("GEMINI_API_KEY is missing. Please add it to your Secrets in AI Studio.");
+    // Check if the API key is available in the browser context
+    // In AI Studio, this is managed automatically.
+    const key = process.env.GEMINI_API_KEY;
+    if (!key || key === "MY_GEMINI_API_KEY" || key === "") {
+       setErrorStatus(
+         "The Gemini API key is missing. Please ensure you have added a secret named exactly 'GEMINI_KEY' in the Secrets panel."
+       );
     }
   }, []);
 
@@ -270,11 +275,21 @@ export default function App() {
               animate={{ opacity: 1, h: 'auto' }}
               className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl flex items-center justify-between mb-2 shrink-0"
             >
-              <div className="flex items-center gap-3">
-                <AlertCircle size={18} />
-                <span className="text-sm font-medium">{errorStatus}</span>
+              <div className="flex flex-col md:flex-row md:items-center gap-3">
+                <div className="flex items-center gap-3">
+                  <AlertCircle size={18} />
+                  <span className="text-sm font-medium">{errorStatus}</span>
+                </div>
+                {errorStatus.includes('GEMINI_API_KEY') && (
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 px-3 py-1 rounded-md transition-colors font-semibold"
+                  >
+                    Refresh App
+                  </button>
+                )}
               </div>
-              <button onClick={() => setErrorStatus(null)} className="p-1 hover:bg-white/10 rounded">
+              <button onClick={() => setErrorStatus(null)} className="p-1 hover:bg-white/10 rounded ml-4">
                 <X size={14} />
               </button>
             </motion.div>
