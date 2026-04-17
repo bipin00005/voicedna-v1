@@ -1,0 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-bg: #0F1115;
+  --color-sidebar: #16191F;
+  --color-card: #1C2128;
+  --color-accent: #3B82F6;
+  --color-accent-glow: rgba(59, 130, 246, 0.2);
+  --color-text-main: #E2E8F0;
+  --color-text-dim: #94A3B8;
+  --color-border: #2D333B;
+  --color-success: #10B981;
+
+  --color-landing-bg: #08090C;
+  --color-paper: #F5F5F4;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-text-main font-sans antialiased;
+  }
+}
+
+.hero-gradient {
+  background: radial-gradient(circle at 50% -20%, var(--color-accent-glow) 0%, transparent 70%);
+}
+
+.glass-card {
+  @apply bg-white/5 backdrop-blur-xl border border-white/10;
+}
+
+/* ... existing styles ... */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-bg;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full hover:bg-text-dim/30 transition-colors;
+}
+
+.metric-indicator {
+  @apply h-1 bg-border rounded-full overflow-hidden;
+}
+
+.indicator-fill {
+  @apply h-full bg-accent rounded-full transition-all duration-500;
+}
+
+.status-pulse {
+  @apply w-2 h-2 bg-success rounded-full;
+  box-shadow: 0 0 8px var(--color-success);
+}
