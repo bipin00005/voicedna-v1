@@ -1198,15 +1198,18 @@ function VerificationView({ text }: { text: string }) {
   }, [text]);
 
   const externalTools = [
-    { name: 'ZeroGPT', url: 'https://www.zerogpt.com/', color: 'text-blue-400', desc: 'Highly reliable free engine with low false positives' },
-    { name: 'GPTZero', url: 'https://gptzero.me/', color: 'text-emerald-400', desc: 'The industry standard for academic and educator verification' },
-    { name: 'QuillBot', url: 'https://quillbot.com/ai-detector', color: 'text-orange-400', desc: 'Analyzes sentence structure and rephrasing patterns' },
-    { name: 'CopyLeaks', url: 'https://copyleaks.com/ai-content-detector', color: 'text-purple-400', desc: 'Enterprise-grade deep scan with multi-language support' },
-    { name: 'Winston AI', url: 'https://gowinston.ai/', color: 'text-yellow-400', desc: 'Premium detector specialized in GPT-4 and Claude content' },
-    { name: 'Originality.ai', url: 'https://originality.ai/', color: 'text-red-400', desc: 'Built for web publishers to detect AI and plagiarism' },
-    { name: 'Sapling', url: 'https://sapling.ai/ai-content-detector', color: 'text-cyan-400', desc: 'Fast, snippet-based scanning for professional communication' },
-    { name: 'Scribbr', url: 'https://www.scribbr.com/ai-detector/', color: 'text-indigo-400', desc: 'Trusted academic resource for source integrity' },
-    { name: 'Stealth Writer', url: 'https://stealthwriter.ai/', color: 'text-pink-400', desc: 'Benchmark comparison against advanced rewriting engines' }
+    { name: 'ZeroGPT', url: 'https://www.zerogpt.com/', color: 'text-blue-400', desc: 'High accuracy with deep sentence-level analysis' },
+    { name: 'GPTZero', url: 'https://gptzero.me/', color: 'text-emerald-400', desc: 'The gold standard for educators and academic integrity' },
+    { name: 'QuillBot', url: 'https://quillbot.com/ai-detector', color: 'text-orange-400', desc: 'Specialized in detecting paraphrased and reworded AI content' },
+    { name: 'CopyLeaks', url: 'https://copyleaks.com/ai-content-detector', color: 'text-purple-400', desc: 'Enterprise-grade military-level detection across 30+ languages' },
+    { name: 'Content at Scale', url: 'https://contentatscale.ai/ai-content-detector/', color: 'text-lime-400', desc: 'Best for detecting SEO-focused AI long-form articles' },
+    { name: 'Winston AI', url: 'https://gowinston.ai/', color: 'text-yellow-400', desc: 'Highly rated for GPT-4, Claude, and Gemini detection' },
+    { name: 'Originality.ai', url: 'https://originality.ai/', color: 'text-red-400', desc: 'Aggressive detection tailored for professional web publishers' },
+    { name: 'Hive Moderation', url: 'https://hivemoderation.com/ai-generated-content-detection', color: 'text-amber-500', desc: 'Powerful multi-modal detection trusted by major platforms' },
+    { name: 'Crossplag', url: 'https://crossplag.com/ai-content-detector/', color: 'text-blue-500', desc: 'Linguistic-based analysis with integrated plagiarism checks' },
+    { name: 'Sapling', url: 'https://sapling.ai/ai-content-detector', color: 'text-cyan-400', desc: 'Lightweight and fast, perfect for quick email and chat scans' },
+    { name: 'Scribbr', url: 'https://www.scribbr.com/ai-detector/', color: 'text-indigo-400', desc: 'Reliable academic-focused checker powered by Turnitin logic' },
+    { name: 'Stealth Writer', url: 'https://stealthwriter.ai/', color: 'text-pink-400', desc: 'The ultimate benchmark to test text against invisible AI' }
   ];
 
   return (
