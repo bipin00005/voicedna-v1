@@ -307,6 +307,17 @@ async function startServer() {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   });
+
+  return app;
 }
 
-startServer().catch(console.error);
+const appPromise = startServer().catch(console.error);
+
+export default async (req: any, res: any) => {
+  const app = await appPromise;
+  if (!app) {
+    res.status(500).send("Server failed to start");
+    return;
+  }
+  return app(req, res);
+};
